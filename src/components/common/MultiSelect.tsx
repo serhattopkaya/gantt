@@ -42,9 +42,10 @@ export function MultiSelect({ options, value, onChange, placeholder = 'Select…
     }
   };
 
-  const selectedLabels = value
-    .map(v => options.find(o => o.value === v)?.label)
-    .filter(Boolean) as string[];
+  // Zip value ids with their labels, filtering out any stale ids with no matching option
+  const selectedChips = value
+    .map(v => ({ value: v, label: options.find(o => o.value === v)?.label }))
+    .filter((c): c is { value: string; label: string } => !!c.label);
 
   return (
     <div ref={containerRef} className="relative">
@@ -53,19 +54,19 @@ export function MultiSelect({ options, value, onChange, placeholder = 'Select…
       )}
 
       {/* Chips */}
-      {selectedLabels.length > 0 && (
+      {selectedChips.length > 0 && (
         <div className="flex flex-wrap gap-1 mb-2">
-          {selectedLabels.map((l, i) => (
+          {selectedChips.map(chip => (
             <span
-              key={value[i]}
+              key={chip.value}
               className="inline-flex items-center gap-1 bg-indigo-100 text-indigo-700 rounded-full px-2 py-0.5 text-xs font-medium"
             >
-              {l}
+              {chip.label}
               <button
                 type="button"
-                onClick={() => toggle(value[i])}
+                onClick={() => toggle(chip.value)}
                 className="hover:text-indigo-900"
-                aria-label={`Remove ${l}`}
+                aria-label={`Remove ${chip.label}`}
               >
                 <X size={10} />
               </button>

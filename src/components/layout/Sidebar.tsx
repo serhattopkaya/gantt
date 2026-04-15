@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Plus, Edit, Trash2, MoreHorizontal } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 import { ProjectModal } from '../modals/ProjectModal';
@@ -19,6 +19,18 @@ export function Sidebar({ onAddProject }: SidebarProps) {
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [deletingProject, setDeletingProject] = useState<Project | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!openMenuId) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpenMenuId(null);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [openMenuId]);
 
   function getTaskCount(projectId: string) {
     return tasks.filter(t => t.projectId === projectId).length;
@@ -94,7 +106,7 @@ export function Sidebar({ onAddProject }: SidebarProps) {
                 </button>
 
                 {/* Kebab menu */}
-                <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div ref={openMenuId === project.id ? menuRef : undefined} className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
                     onClick={e => {
                       e.stopPropagation();
@@ -139,14 +151,6 @@ export function Sidebar({ onAddProject }: SidebarProps) {
           </button>
         </div>
       </aside>
-
-      {/* Close open menu on outside click */}
-      {openMenuId && (
-        <div
-          className="fixed inset-0 z-10"
-          onClick={() => setOpenMenuId(null)}
-        />
-      )}
 
       {editingProject && (
         <ProjectModal

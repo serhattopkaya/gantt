@@ -28,6 +28,13 @@ export default function App() {
     hydrate();
   }, [hydrate]);
 
+  // Auto-select first project if none is selected (e.g. after deletion)
+  useEffect(() => {
+    if (hydrated && !currentProjectId && projects.length > 0) {
+      setCurrentProject(projects[0].id);
+    }
+  }, [hydrated, currentProjectId, projects, setCurrentProject]);
+
   if (!hydrated) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -93,13 +100,6 @@ export default function App() {
         />
       )}
 
-      {/* Click outside sidebar menus: handled in Sidebar */}
-      {/* Switch project if currentProjectId is null but projects exist */}
-      {hydrated && !currentProjectId && projects.length > 0 && (
-        <div className="hidden" ref={el => {
-          if (el) setCurrentProject(projects[0].id);
-        }} />
-      )}
     </div>
   );
 }

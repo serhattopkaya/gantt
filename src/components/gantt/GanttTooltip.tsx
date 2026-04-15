@@ -1,5 +1,5 @@
 import type { Task } from 'gantt-task-react';
-import { formatDisplay } from '../../lib/dates';
+import { toISODate, formatDisplay } from '../../lib/dates';
 
 interface GanttTooltipProps {
   task: Task;
@@ -8,8 +8,8 @@ interface GanttTooltipProps {
 }
 
 export function GanttTooltip({ task }: GanttTooltipProps) {
-  const startISO = task.start.toISOString().slice(0, 10);
-  const endISO = task.end.toISOString().slice(0, 10);
+  const startISO = toISODate(task.start);
+  const endISO = toISODate(task.end);
   const isMilestone = task.type === 'milestone';
 
   return (
@@ -49,7 +49,7 @@ export function GanttTooltip({ task }: GanttTooltipProps) {
                 <div
                   className="h-full rounded-full"
                   style={{
-                    width: `${task.progress}%`,
+                    width: `${Math.max(0, Math.min(100, task.progress))}%`,
                     backgroundColor: task.styles?.progressColor ?? '#6366F1',
                   }}
                 />

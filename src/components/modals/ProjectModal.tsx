@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { FormEvent } from 'react';
 import { Modal } from './Modal';
 import { Button } from '../common/Button';
 import { ColorSwatch } from '../common/ColorSwatch';
@@ -21,7 +22,7 @@ export function ProjectModal({ mode, initial, onClose }: ProjectModalProps) {
   const updateProject = useAppStore(s => s.updateProject);
   const setCurrentProject = useAppStore(s => s.setCurrentProject);
 
-  function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!name.trim()) {
       setError('Project name is required');

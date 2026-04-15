@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { FormEvent } from 'react';
 import { Modal } from './Modal';
 import { Button } from '../common/Button';
 import { MultiSelect } from '../common/MultiSelect';
@@ -32,18 +33,34 @@ export function TaskModal({ mode, initial, projectId, defaultType = 'task', onCl
   const projectTasks = tasks.filter(
     t => t.projectId === projectId && t.id !== initial?.id
   );
+  // Filter out stale dependency ids (task may have been deleted externally)
+  const validDependencies = dependencies.filter(id => projectTasks.some(t => t.id === id));
   const depOptions = projectTasks.map(t => ({ value: t.id, label: t.name }));
+
+  function handleTypeChange(newType: AppTaskType) {
+    setType(newType);
+    // Clear type-specific errors when switching
+    setErrors(prev => {
+      const next = { ...prev };
+      delete next.end;
+      delete next.progress;
+      return next;
+    });
+  }
 
   function validate(): boolean {
     const newErrors: Record<string, string> = {};
     if (!name.trim()) newErrors.name = 'Name is required';
-    if (type === 'task' && end < start) newErrors.end = 'End date must be on or after start date';
-    if (progress < 0 || progress > 100) newErrors.progress = 'Progress must be 0–100';
+    if (!start) newErrors.start = 'Date is required';
+    if (type === 'task') {
+      if (!end) newErrors.end = 'End date is required';
+      else if (end < start) newErrors.end = 'End date must be on or after start date';
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!validate()) return;
 
@@ -54,7 +71,7 @@ export function TaskModal({ mode, initial, projectId, defaultType = 'task', onCl
       start,
       end: type === 'milestone' ? start : end,
       progress: type === 'milestone' ? 0 : progress,
-      dependencies,
+      dependencies: validDependencies,
     };
 
     if (mode === 'create') {
@@ -86,7 +103,7 @@ export function TaskModal({ mode, initial, projectId, defaultType = 'task', onCl
               <button
                 key={t}
                 type="button"
-                onClick={() => setType(t)}
+                onClick={() => handleTypeChange(t)}
                 className={`flex-1 h-9 rounded-lg text-sm font-medium transition-colors ${
                   type === t
                     ? 'bg-indigo-600 text-white'
@@ -124,9 +141,10 @@ export function TaskModal({ mode, initial, projectId, defaultType = 'task', onCl
             <input
               type="date"
               value={start}
-              onChange={e => setStart(e.target.value)}
+              onChange={e => { setStart(e.target.value); setErrors(prev => ({ ...prev, start: '' })); }}
               className="w-full h-10 px-3 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
             />
+            {errors.start && <p className="text-xs text-red-500 mt-1">{errors.start}</p>}
           </div>
           {!isMilestone && (
             <div>
@@ -158,7 +176,6 @@ export function TaskModal({ mode, initial, projectId, defaultType = 'task', onCl
               onChange={e => setProgress(Number(e.target.value))}
               className="w-full accent-indigo-600"
             />
-            {errors.progress && <p className="text-xs text-red-500 mt-1">{errors.progress}</p>}
           </div>
         )}
 
@@ -167,7 +184,7 @@ export function TaskModal({ mode, initial, projectId, defaultType = 'task', onCl
           <MultiSelect
             label="Dependencies"
             options={depOptions}
-            value={dependencies}
+            value={validDependencies}
             onChange={setDependencies}
             placeholder="Select predecessor tasks…"
           />
