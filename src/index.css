@@ -1,0 +1,31 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  @apply bg-white text-slate-800;
+}
+
+/* gantt-task-react overrides */
+._2dZTy {
+  border-radius: 6px;
+}
+
+.ganttTable {
+  @apply border-r border-slate-200;
+}
+
+._34SS0 {
+  @apply bg-slate-50;
+}
