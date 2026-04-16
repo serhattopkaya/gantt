@@ -178,9 +178,7 @@ export function TaskListView({ project, onEditTask, onAddTask }: TaskListViewPro
       if (v) updateTask(id, { name: v });
     } else if (field === 'progress') {
       const n = Number(editValue);
-      if (Number.isFinite(n)) {
-        updateTask(id, { progress: Math.max(0, Math.min(100, Math.round(n))) });
-      }
+      if (Number.isFinite(n)) updateTask(id, { progress: Math.round(n) });
     }
     setEditing(null);
   }

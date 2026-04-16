@@ -50,10 +50,10 @@ export default function App() {
     }
   }, [hydrated, currentProjectId, projects, setCurrentProject, view]);
 
-  const effectiveModal: ModalState =
-    modal.type === 'editTask' && !projects.some(p => p.id === modal.task.projectId)
-      ? { type: 'none' }
-      : modal;
+  // If the task being edited belongs to a project that's been deleted,
+  // suppress the modal rather than rendering against a stale task.
+  const editTaskProjectExists =
+    modal.type !== 'editTask' || projects.some(p => p.id === modal.task.projectId);
 
   if (!hydrated) {
     return (
@@ -122,25 +122,25 @@ export default function App() {
       </div>
 
       {/* Modals */}
-      {effectiveModal.type === 'newProject' && (
+      {modal.type === 'newProject' && (
         <ProjectModal mode="create" onClose={closeModal} />
       )}
-      {effectiveModal.type === 'editProject' && currentProject && (
+      {modal.type === 'editProject' && currentProject && (
         <ProjectModal mode="edit" initial={currentProject} onClose={closeModal} />
       )}
-      {effectiveModal.type === 'newTask' && currentProjectId && (
+      {modal.type === 'newTask' && currentProjectId && (
         <TaskModal
           mode="create"
           projectId={currentProjectId}
-          defaultType={effectiveModal.taskType}
+          defaultType={modal.taskType}
           onClose={closeModal}
         />
       )}
-      {effectiveModal.type === 'editTask' && (
+      {modal.type === 'editTask' && editTaskProjectExists && (
         <TaskModal
           mode="edit"
-          initial={effectiveModal.task}
-          projectId={effectiveModal.task.projectId}
+          initial={modal.task}
+          projectId={modal.task.projectId}
           onClose={closeModal}
         />
       )}

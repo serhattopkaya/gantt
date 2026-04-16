@@ -16,8 +16,16 @@ export function addDays(date: Date, days: number): Date {
   return result;
 }
 
+export function shiftISO(iso: string, days: number): string {
+  return toISODate(addDays(fromISODate(iso), days));
+}
+
 export function todayISO(): string {
   return toISODate(new Date());
+}
+
+export function localDayKey(isoTimestamp: string): string {
+  return toISODate(new Date(isoTimestamp));
 }
 
 export function formatDisplay(iso: string): string {

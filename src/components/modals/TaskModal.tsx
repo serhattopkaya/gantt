@@ -9,14 +9,13 @@ import { useAppStore } from '../../store/useAppStore';
 import { useToastStore } from '../../store/useToastStore';
 import {
   todayISO,
-  fromISODate,
-  toISODate,
-  addDays,
+  shiftISO,
   workingDaysBetween,
   calendarDaysBetween,
   weekdayShort,
 } from '../../lib/dates';
 import { hasCycle } from '../../lib/dependencies';
+import { DependentsPreview } from '../common/DependentsPreview';
 import type { AppTask, AppTaskType } from '../../types';
 
 interface TaskModalProps {
@@ -25,10 +24,6 @@ interface TaskModalProps {
   projectId: string;
   defaultType?: AppTaskType;
   onClose: () => void;
-}
-
-function shiftISO(iso: string, days: number): string {
-  return toISODate(addDays(fromISODate(iso), days));
 }
 
 const QUICK_SETS: Array<{ label: string; days: number }> = [
@@ -98,19 +93,18 @@ export function TaskModal({ mode, initial, projectId, defaultType = 'task', onCl
     });
   }
 
-  function applyStartQuick(days: number) {
-    const next = shiftISO(today, days);
-    setStart(next);
-    if (type === 'milestone') setEnd(next);
-    else if (end < next) setEnd(next);
-    setErrors(prev => ({ ...prev, start: '', end: '' }));
-  }
-
-  function applyEndQuick(days: number) {
-    const base = start || today;
-    const next = shiftISO(base, days);
-    setEnd(next);
-    setErrors(prev => ({ ...prev, end: '' }));
+  function applyQuick(field: 'start' | 'end', days: number) {
+    if (field === 'start') {
+      const next = shiftISO(today, days);
+      setStart(next);
+      if (type === 'milestone') setEnd(next);
+      else if (end < next) setEnd(next);
+      setErrors(prev => ({ ...prev, start: '', end: '' }));
+    } else {
+      const next = shiftISO(start || today, days);
+      setEnd(next);
+      setErrors(prev => ({ ...prev, end: '' }));
+    }
   }
 
   function validate(): boolean {
@@ -270,7 +264,7 @@ export function TaskModal({ mode, initial, projectId, defaultType = 'task', onCl
                 <button
                   key={q.label}
                   type="button"
-                  onClick={() => applyStartQuick(q.days)}
+                  onClick={() => applyQuick('start', q.days)}
                   className="h-6 px-2 rounded-md text-[11px] font-medium text-text-secondary bg-surface-muted hover:bg-border transition-colors"
                 >
                   {q.label}
@@ -304,7 +298,7 @@ export function TaskModal({ mode, initial, projectId, defaultType = 'task', onCl
                 <button
                   key={q.label}
                   type="button"
-                  onClick={() => applyEndQuick(q.days)}
+                  onClick={() => applyQuick('end', q.days)}
                   className="h-6 px-2 rounded-md text-[11px] font-medium text-text-secondary bg-surface-muted hover:bg-border transition-colors"
                 >
                   {q.label}
@@ -437,25 +431,7 @@ export function TaskModal({ mode, initial, projectId, defaultType = 'task', onCl
         <ConfirmDialog
           title="Delete task"
           description={`"${initial.name}" will be permanently deleted.`}
-          body={
-            dependents.length === 0 ? (
-              <p className="text-text-muted">No other tasks depend on this.</p>
-            ) : (
-              <div>
-                <p className="font-medium text-text-primary">
-                  {dependents.length} {dependents.length === 1 ? 'task depends' : 'tasks depend'} on this:
-                </p>
-                <ul className="mt-1.5 list-disc list-inside text-text-secondary space-y-0.5">
-                  {dependents.slice(0, 3).map(t => (
-                    <li key={t.id} className="truncate">{t.name}</li>
-                  ))}
-                  {dependents.length > 3 && (
-                    <li className="text-text-muted">…and {dependents.length - 3} more</li>
-                  )}
-                </ul>
-              </div>
-            )
-          }
+          body={<DependentsPreview dependents={dependents} />}
           onConfirm={handleDelete}
           onCancel={() => setConfirmingDelete(false)}
         />

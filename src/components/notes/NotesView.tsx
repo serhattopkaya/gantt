@@ -5,6 +5,7 @@ import { useToastStore } from '../../store/useToastStore';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { EmptyState } from '../common/EmptyState';
 import { Button } from '../common/Button';
+import { fromISODate, localDayKey, shiftISO, todayISO } from '../../lib/dates';
 import type { Project, ProjectNote } from '../../types';
 
 interface NotesViewProps {
@@ -20,28 +21,17 @@ function formatTime(iso: string): string {
   });
 }
 
-function localDayKey(iso: string): string {
-  const d = new Date(iso);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
 function formatDayLabel(dayKey: string): string {
-  const [y, m, d] = dayKey.split('-').map(Number);
-  const target = new Date(y, m - 1, d);
-  const today = new Date();
-  const todayKey = localDayKey(today.toISOString());
-  if (dayKey === todayKey) return 'Today';
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  if (dayKey === localDayKey(yesterday.toISOString())) return 'Yesterday';
+  const today = todayISO();
+  if (dayKey === today) return 'Today';
+  if (dayKey === shiftISO(today, -1)) return 'Yesterday';
+  const target = fromISODate(dayKey);
+  const thisYear = fromISODate(today).getFullYear();
   return target.toLocaleDateString(undefined, {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
-    year: target.getFullYear() === today.getFullYear() ? undefined : 'numeric',
+    year: target.getFullYear() === thisYear ? undefined : 'numeric',
   });
 }
 
@@ -50,6 +40,7 @@ export function NotesView({ project }: NotesViewProps) {
   const addNote = useAppStore(s => s.addNote);
   const updateNote = useAppStore(s => s.updateNote);
   const deleteNote = useAppStore(s => s.deleteNote);
+  const restoreNote = useAppStore(s => s.restoreNote);
   const pushToast = useToastStore(s => s.push);
 
   const [draft, setDraft] = useState('');
@@ -139,11 +130,7 @@ export function NotesView({ project }: NotesViewProps) {
       message: 'Note deleted.',
       action: {
         label: 'Undo',
-        run: () => {
-          useAppStore.setState(s =>
-            s.notes.some(n => n.id === removed.id) ? s : { notes: [...s.notes, removed] }
-          );
-        },
+        run: () => restoreNote(removed),
       },
     });
   }

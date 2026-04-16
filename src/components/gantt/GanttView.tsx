@@ -10,6 +10,7 @@ import { toISODate } from '../../lib/dates';
 import { useResolvedTheme } from '../../lib/useTheme';
 import { EmptyState } from '../common/EmptyState';
 import { ConfirmDialog } from '../common/ConfirmDialog';
+import { DependentsPreview } from '../common/DependentsPreview';
 import { GanttTooltip } from './GanttTooltip';
 import type { AppTask, Project } from '../../types';
 
@@ -114,9 +115,7 @@ export const GanttView = forwardRef<GanttViewHandle, GanttViewProps>(function Ga
   }
 
   function handleProgressChange(task: LibTask) {
-    updateTask(task.id, {
-      progress: Math.max(0, Math.min(100, Math.round(task.progress))),
-    });
+    updateTask(task.id, { progress: Math.round(task.progress) });
   }
 
   function handleDoubleClick(task: LibTask) {
@@ -190,28 +189,3 @@ export const GanttView = forwardRef<GanttViewHandle, GanttViewProps>(function Ga
   );
 });
 
-function DependentsPreview({ dependents }: { dependents: AppTask[] }) {
-  if (dependents.length === 0) {
-    return <p className="text-text-muted">No other tasks depend on this.</p>;
-  }
-  const preview = dependents.slice(0, 3).map(t => t.name);
-  const remaining = dependents.length - preview.length;
-  return (
-    <div>
-      <p className="font-medium text-text-primary">
-        {dependents.length} {dependents.length === 1 ? 'task depends' : 'tasks depend'} on this:
-      </p>
-      <ul className="mt-1.5 list-disc list-inside text-text-secondary space-y-0.5">
-        {preview.map(n => (
-          <li key={n} className="truncate">{n}</li>
-        ))}
-        {remaining > 0 && (
-          <li className="text-text-muted">…and {remaining} more</li>
-        )}
-      </ul>
-      <p className="mt-2 text-xs text-text-muted">
-        These tasks will have the dependency removed.
-      </p>
-    </div>
-  );
-}

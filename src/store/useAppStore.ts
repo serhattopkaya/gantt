@@ -11,7 +11,7 @@ import type {
 } from '../types';
 import { loadState, saveState } from '../lib/storage';
 import { createSeedData, SEED_MARKER_NAME } from '../lib/seed';
-import { fromISODate, toISODate, addDays } from '../lib/dates';
+import { shiftISO } from '../lib/dates';
 
 interface StoreState {
   projects: Project[];
@@ -38,6 +38,7 @@ interface StoreState {
   addNote: (input: { projectId: string; body: string }) => ProjectNote | null;
   updateNote: (id: string, body: string) => void;
   deleteNote: (id: string) => void;
+  restoreNote: (note: ProjectNote) => void;
 
   // task actions
   addTask: (input: Omit<AppTask, 'id' | 'displayOrder'>) => AppTask;
@@ -57,7 +58,6 @@ interface StoreState {
   setSidebarCollapsed: (c: boolean) => void;
   toggleSidebar: () => void;
   toggleGroupCollapsed: (id: string) => void;
-  setGroupCollapsed: (id: string, collapsed: boolean) => void;
   dismissSeed: () => void;
   clearSeedData: () => void;
 
@@ -73,10 +73,6 @@ export function detectSeeded(projects: Project[], tasks: AppTask[]): boolean {
 }
 
 export const selectIsSeeded = (s: StoreState) => detectSeeded(s.projects, s.tasks);
-
-function shiftIso(iso: string, days: number): string {
-  return toISODate(addDays(fromISODate(iso), days));
-}
 
 export const useAppStore = create<StoreState>((set, get) => ({
   projects: [],
@@ -106,11 +102,19 @@ export const useAppStore = create<StoreState>((set, get) => ({
   },
 
   updateProject(id, patch) {
-    set(s => ({
-      projects: s.projects.map(p =>
-        p.id === id ? { ...p, ...patch, updatedAt: new Date().toISOString() } : p
-      ),
-    }));
+    set(s => {
+      const target = s.projects.find(p => p.id === id);
+      if (!target) return s;
+      const unchanged = (Object.keys(patch) as Array<keyof typeof patch>).every(
+        k => patch[k] === target[k]
+      );
+      if (unchanged) return s;
+      return {
+        projects: s.projects.map(p =>
+          p.id === id ? { ...p, ...patch, updatedAt: new Date().toISOString() } : p
+        ),
+      };
+    });
   },
 
   deleteProject(id) {
@@ -179,6 +183,14 @@ export const useAppStore = create<StoreState>((set, get) => ({
     set(s => ({ notes: s.notes.filter(n => n.id !== id) }));
   },
 
+  restoreNote(note) {
+    set(s => {
+      if (s.notes.some(n => n.id === note.id)) return s;
+      if (!s.projects.some(p => p.id === note.projectId)) return s;
+      return { notes: [...s.notes, note] };
+    });
+  },
+
   addTask(input) {
     const { tasks } = get();
     const projectTasks = tasks.filter(t => t.projectId === input.projectId);
@@ -210,28 +222,42 @@ export const useAppStore = create<StoreState>((set, get) => ({
       const projectSiblings = s.tasks.filter(t => t.projectId === target.projectId && t.id !== id);
       const siblingIds = new Set(projectSiblings.map(t => t.id));
       const groupIds = new Set(projectSiblings.filter(t => t.type === 'group').map(t => t.id));
+
+      const merged = { ...target, ...patch };
+      if (merged.type === 'milestone') {
+        merged.end = merged.start;
+        merged.progress = 0;
+      } else if (merged.type === 'group') {
+        merged.progress = 0;
+        merged.parentId = undefined;
+      } else if (typeof patch.progress === 'number') {
+        merged.progress = Math.max(0, Math.min(100, patch.progress));
+      }
+      if (merged.type !== 'group' && merged.parentId && !groupIds.has(merged.parentId)) {
+        merged.parentId = undefined;
+      }
+      // Drop self-refs and dangling ids pointing to other projects / deleted tasks
+      merged.dependencies = (merged.dependencies ?? []).filter(
+        dep => dep !== id && siblingIds.has(dep)
+      );
+
+      // Bail out if nothing actually changed — Gantt drag handlers fire per-frame
+      // and often land on the same ISO day or rounded progress; without this
+      // guard every such event would trigger a store write and re-persist.
+      const scalarSame =
+        merged.name === target.name &&
+        merged.type === target.type &&
+        merged.start === target.start &&
+        merged.end === target.end &&
+        merged.progress === target.progress &&
+        merged.parentId === target.parentId;
+      const depsSame =
+        merged.dependencies.length === target.dependencies.length &&
+        merged.dependencies.every((d, i) => d === target.dependencies[i]);
+      if (scalarSame && depsSame) return s;
+
       return {
-        tasks: s.tasks.map(t => {
-          if (t.id !== id) return t;
-          const updated = { ...t, ...patch };
-          if (updated.type === 'milestone') {
-            updated.end = updated.start;
-            updated.progress = 0;
-          } else if (updated.type === 'group') {
-            updated.progress = 0;
-            updated.parentId = undefined;
-          } else if (typeof patch.progress === 'number') {
-            updated.progress = Math.max(0, Math.min(100, patch.progress));
-          }
-          if (updated.type !== 'group' && updated.parentId && !groupIds.has(updated.parentId)) {
-            updated.parentId = undefined;
-          }
-          // Drop self-refs and dangling ids pointing to other projects / deleted tasks
-          updated.dependencies = (updated.dependencies ?? []).filter(
-            dep => dep !== id && siblingIds.has(dep)
-          );
-          return updated;
-        }),
+        tasks: s.tasks.map(t => (t.id === id ? merged : t)),
       };
     });
   },
@@ -282,11 +308,11 @@ export const useAppStore = create<StoreState>((set, get) => ({
     set(s => ({
       tasks: s.tasks.map(t => {
         if (!idSet.has(t.id)) return t;
-        const start = shiftIso(t.start, days);
+        const start = shiftISO(t.start, days);
         return {
           ...t,
           start,
-          end: t.type === 'milestone' ? start : shiftIso(t.end, days),
+          end: t.type === 'milestone' ? start : shiftISO(t.end, days),
         };
       }),
     }));
@@ -365,15 +391,6 @@ export const useAppStore = create<StoreState>((set, get) => ({
         ? s.collapsedGroupIds.filter(g => g !== id)
         : [...s.collapsedGroupIds, id],
     }));
-  },
-
-  setGroupCollapsed(id, collapsed) {
-    set(s => {
-      const has = s.collapsedGroupIds.includes(id);
-      if (collapsed && !has) return { collapsedGroupIds: [...s.collapsedGroupIds, id] };
-      if (!collapsed && has) return { collapsedGroupIds: s.collapsedGroupIds.filter(g => g !== id) };
-      return s;
-    });
   },
 
   dismissSeed() {
