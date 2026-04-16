@@ -9,7 +9,7 @@ let pendingState: StoredState | null = null;
 export function isValidStoredState(v: unknown): v is StoredState {
   if (!v || typeof v !== 'object') return false;
   const s = v as Record<string, unknown>;
-  if (s.version !== 1 && s.version !== 2) return false;
+  if (s.version !== 1 && s.version !== 2 && s.version !== 3) return false;
   if (!Array.isArray(s.projects) || !Array.isArray(s.tasks)) return false;
   for (const p of s.projects as unknown[]) {
     if (!p || typeof p !== 'object') return false;
@@ -39,8 +39,8 @@ export function loadState(): StoredState | null {
       console.warn('[gantt] Stored state failed validation; ignoring it and falling back to seed data.');
       return null;
     }
-    // Normalize legacy v1 to v2 shape (optional fields remain undefined)
-    return { ...parsed, version: 2 };
+    // Normalize legacy versions to latest (additive fields default in the store)
+    return { ...parsed, version: 3 };
   } catch {
     return null;
   }

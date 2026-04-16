@@ -299,6 +299,11 @@ export function Sidebar({ onAddProject, mobileOpen, onMobileClose }: SidebarProp
         const projectTasks = tasks.filter(t => t.projectId === deletingProject.id);
         const taskCount = projectTasks.filter(t => t.type === 'task').length;
         const milestoneCount = projectTasks.filter(t => t.type === 'milestone').length;
+        const groupCount = projectTasks.filter(t => t.type === 'group').length;
+        const parts: string[] = [];
+        if (taskCount > 0) parts.push(`${taskCount} ${taskCount === 1 ? 'task' : 'tasks'}`);
+        if (milestoneCount > 0) parts.push(`${milestoneCount} ${milestoneCount === 1 ? 'milestone' : 'milestones'}`);
+        if (groupCount > 0) parts.push(`${groupCount} ${groupCount === 1 ? 'group' : 'groups'}`);
         return (
           <ConfirmDialog
             title="Delete project"
@@ -310,16 +315,8 @@ export function Sidebar({ onAddProject, mobileOpen, onMobileClose }: SidebarProp
                 <p className="text-text-secondary">
                   Also deletes{' '}
                   <span className="font-medium text-text-primary">
-                    {taskCount} {taskCount === 1 ? 'task' : 'tasks'}
+                    {parts.join(', ')}
                   </span>
-                  {milestoneCount > 0 && (
-                    <>
-                      {' '}and{' '}
-                      <span className="font-medium text-text-primary">
-                        {milestoneCount} {milestoneCount === 1 ? 'milestone' : 'milestones'}
-                      </span>
-                    </>
-                  )}
                   .
                 </p>
               )

@@ -1,4 +1,4 @@
-export type AppTaskType = 'task' | 'milestone';
+export type AppTaskType = 'task' | 'milestone' | 'group';
 
 export interface Project {
   id: string;
@@ -15,9 +15,11 @@ export interface AppTask {
   name: string;
   start: string; // ISO date string
   end: string;   // ISO date string; milestone: end === start
-  progress: number; // 0..100
+  progress: number; // 0..100; always 0 for group
   dependencies: string[]; // AppTask.id values in same project
   displayOrder: number;
+  /** id of an AppTask of type 'group' in the same project. Groups never have a parentId. */
+  parentId?: string;
 }
 
 export const VIEW_MODES = ['Day', 'Week', 'Month', 'Quarter', 'Year'] as const;
@@ -33,7 +35,7 @@ export const APP_VIEWS = ['dashboard', 'project'] as const;
 export type AppView = typeof APP_VIEWS[number];
 
 export interface StoredState {
-  version: 2;
+  version: 2 | 3;
   projects: Project[];
   tasks: AppTask[];
   currentProjectId: string | null;
@@ -43,4 +45,5 @@ export interface StoredState {
   view?: AppView;
   sidebarCollapsed?: boolean;
   seedDismissed?: boolean;
+  collapsedGroupIds?: string[];
 }

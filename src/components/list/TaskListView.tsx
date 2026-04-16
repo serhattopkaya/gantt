@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ArrowUpDown, ArrowUp, ArrowDown, Flag, Search, CheckSquare, Square } from 'lucide-react';
+import { ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, ChevronRight, Flag, FolderTree, Search, CheckSquare, Square } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 import { useToastStore } from '../../store/useToastStore';
 import { ConfirmDialog } from '../common/ConfirmDialog';
@@ -19,6 +19,8 @@ interface TaskListViewProps {
 
 export function TaskListView({ project, onEditTask, onAddTask }: TaskListViewProps) {
   const tasks = useAppStore(s => s.tasks);
+  const collapsedGroupIds = useAppStore(s => s.collapsedGroupIds);
+  const toggleGroupCollapsed = useAppStore(s => s.toggleGroupCollapsed);
   const updateTask = useAppStore(s => s.updateTask);
   const bulkSetProgress = useAppStore(s => s.bulkSetProgress);
   const bulkShiftTasks = useAppStore(s => s.bulkShiftTasks);
@@ -44,29 +46,86 @@ export function TaskListView({ project, onEditTask, onAddTask }: TaskListViewPro
     [projectTasks]
   );
 
-  const filtered = useMemo(() => {
-    const q = filter.trim().toLowerCase();
-    const base = q ? projectTasks.filter(t => t.name.toLowerCase().includes(q)) : projectTasks;
-    const sorted = [...base].sort((a, b) => {
-      let cmp = 0;
-      switch (sortKey) {
-        case 'name': cmp = a.name.localeCompare(b.name); break;
-        case 'type': cmp = a.type.localeCompare(b.type); break;
-        case 'start': cmp = a.start.localeCompare(b.start); break;
-        case 'end': cmp = a.end.localeCompare(b.end); break;
-        case 'progress': cmp = a.progress - b.progress; break;
-      }
-      return sortDir === 'asc' ? cmp : -cmp;
-    });
-    return sorted;
-  }, [projectTasks, filter, sortKey, sortDir]);
+  const collapsedSet = useMemo(() => new Set(collapsedGroupIds), [collapsedGroupIds]);
 
-  const visibleIds = useMemo(() => new Set(filtered.map(t => t.id)), [filtered]);
+  const rows = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    const filterActive = q.length > 0;
+
+    // When filtering, keep tasks whose name matches — and rescue their parent
+    // group so the hierarchy still reads correctly.
+    let visibleTasks = projectTasks;
+    if (filterActive) {
+      const matched = projectTasks.filter(t => t.name.toLowerCase().includes(q));
+      const rescuedParentIds = new Set(
+        matched.map(t => t.parentId).filter((id): id is string => Boolean(id))
+      );
+      const keepIds = new Set(matched.map(t => t.id));
+      for (const id of rescuedParentIds) keepIds.add(id);
+      visibleTasks = projectTasks.filter(t => keepIds.has(t.id));
+    }
+
+    const groupIds = new Set(visibleTasks.filter(t => t.type === 'group').map(t => t.id));
+
+    const cmp = (a: AppTask, b: AppTask): number => {
+      let d = 0;
+      switch (sortKey) {
+        case 'name': d = a.name.localeCompare(b.name); break;
+        case 'type': d = a.type.localeCompare(b.type); break;
+        case 'start': d = a.start.localeCompare(b.start); break;
+        case 'end': d = a.end.localeCompare(b.end); break;
+        case 'progress': d = a.progress - b.progress; break;
+      }
+      return sortDir === 'asc' ? d : -d;
+    };
+
+    const groups = visibleTasks.filter(t => t.type === 'group').sort(cmp);
+    const childrenByParent = new Map<string, AppTask[]>();
+    const orphans: AppTask[] = [];
+    for (const t of visibleTasks) {
+      if (t.type === 'group') continue;
+      if (t.parentId && groupIds.has(t.parentId)) {
+        const bucket = childrenByParent.get(t.parentId) ?? [];
+        bucket.push(t);
+        childrenByParent.set(t.parentId, bucket);
+      } else {
+        orphans.push(t);
+      }
+    }
+    for (const bucket of childrenByParent.values()) bucket.sort(cmp);
+    orphans.sort(cmp);
+
+    // Total children per group (based on full projectTasks, not filtered view)
+    // so the count chip stays stable regardless of search.
+    const totalChildCount = new Map<string, number>();
+    for (const t of projectTasks) {
+      if (t.type !== 'group' && t.parentId) {
+        totalChildCount.set(t.parentId, (totalChildCount.get(t.parentId) ?? 0) + 1);
+      }
+    }
+
+    const built: Array<{ task: AppTask; depth: 0 | 1; hasChildren: boolean; childCount: number }> = [];
+    for (const g of groups) {
+      const childCount = totalChildCount.get(g.id) ?? 0;
+      built.push({ task: g, depth: 0, hasChildren: childCount > 0, childCount });
+      const expanded = filterActive || !collapsedSet.has(g.id);
+      if (expanded) {
+        const kids = childrenByParent.get(g.id) ?? [];
+        for (const k of kids) built.push({ task: k, depth: 1, hasChildren: false, childCount: 0 });
+      }
+    }
+    for (const t of orphans) {
+      built.push({ task: t, depth: 0, hasChildren: false, childCount: 0 });
+    }
+    return built;
+  }, [projectTasks, filter, sortKey, sortDir, collapsedSet]);
+
+  const visibleIds = useMemo(() => new Set(rows.map(r => r.task.id)), [rows]);
   const selectedVisible = useMemo(
     () => Array.from(selectedIds).filter(id => visibleIds.has(id)),
     [selectedIds, visibleIds]
   );
-  const allVisibleSelected = filtered.length > 0 && filtered.every(t => selectedIds.has(t.id));
+  const allVisibleSelected = rows.length > 0 && rows.every(r => selectedIds.has(r.task.id));
 
   if (projectTasks.length === 0) {
     return <EmptyState variant="no-tasks" onAction={onAddTask} />;
@@ -85,13 +144,13 @@ export function TaskListView({ project, onEditTask, onAddTask }: TaskListViewPro
     if (allVisibleSelected) {
       setSelectedIds(prev => {
         const next = new Set(prev);
-        for (const t of filtered) next.delete(t.id);
+        for (const r of rows) next.delete(r.task.id);
         return next;
       });
     } else {
       setSelectedIds(prev => {
         const next = new Set(prev);
-        for (const t of filtered) next.add(t.id);
+        for (const r of rows) next.add(r.task.id);
         return next;
       });
     }
@@ -203,12 +262,14 @@ export function TaskListView({ project, onEditTask, onAddTask }: TaskListViewPro
             </tr>
           </thead>
           <tbody>
-            {filtered.map(t => {
+            {rows.map(({ task: t, depth, hasChildren, childCount }) => {
               const selected = selectedIds.has(t.id);
+              const isGroupRow = t.type === 'group';
+              const isCollapsed = collapsedSet.has(t.id);
               return (
                 <tr
                   key={t.id}
-                  className={`border-b border-border ${selected ? 'bg-indigo-50 dark:bg-indigo-900/20' : 'hover:bg-surface-muted'}`}
+                  className={`border-b border-border ${selected ? 'bg-indigo-50 dark:bg-indigo-900/20' : isGroupRow ? 'bg-surface-alt/40 hover:bg-surface-muted' : 'hover:bg-surface-muted'}`}
                 >
                   <td className="px-3 py-2.5">
                     <button
@@ -224,6 +285,7 @@ export function TaskListView({ project, onEditTask, onAddTask }: TaskListViewPro
                   </td>
                   <td
                     className="px-3 py-2.5 text-text-primary cursor-text"
+                    style={depth > 0 ? { paddingLeft: `${12 + depth * 20}px` } : undefined}
                     onDoubleClick={() => startEdit(t.id, 'name', t.name)}
                   >
                     {editing?.id === t.id && editing.field === 'name' ? (
@@ -240,12 +302,30 @@ export function TaskListView({ project, onEditTask, onAddTask }: TaskListViewPro
                         className="w-full h-7 px-2 border border-indigo-500 rounded bg-surface text-text-primary focus:outline-none"
                       />
                     ) : (
-                      <button
-                        onClick={() => onEditTask(t)}
-                        className="text-left hover:underline"
-                      >
-                        {t.name}
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        {hasChildren ? (
+                          <button
+                            type="button"
+                            onClick={() => toggleGroupCollapsed(t.id)}
+                            aria-expanded={!isCollapsed}
+                            aria-label={isCollapsed ? 'Expand group' : 'Collapse group'}
+                            className="inline-flex items-center justify-center w-5 h-5 rounded text-text-muted hover:text-text-primary hover:bg-surface-muted"
+                          >
+                            {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                          </button>
+                        ) : (
+                          <span className="inline-block w-5" aria-hidden="true" />
+                        )}
+                        <button
+                          onClick={() => onEditTask(t)}
+                          className={`text-left hover:underline ${isGroupRow ? 'font-medium' : ''}`}
+                        >
+                          {t.name}
+                        </button>
+                        {isGroupRow && childCount > 0 && (
+                          <span className="text-xs text-text-muted tabular-nums">· {childCount}</span>
+                        )}
+                      </div>
                     )}
                   </td>
                   <td className="px-3 py-2.5 text-text-secondary">
@@ -253,6 +333,11 @@ export function TaskListView({ project, onEditTask, onAddTask }: TaskListViewPro
                       <span className="inline-flex items-center gap-1 text-xs">
                         <Flag size={12} />
                         Milestone
+                      </span>
+                    ) : t.type === 'group' ? (
+                      <span className="inline-flex items-center gap-1 text-xs">
+                        <FolderTree size={12} />
+                        Group
                       </span>
                     ) : (
                       <span className="text-xs">Task</span>
@@ -266,7 +351,7 @@ export function TaskListView({ project, onEditTask, onAddTask }: TaskListViewPro
                   </td>
                   <td
                     className="px-3 py-2.5 text-text-primary cursor-text"
-                    onDoubleClick={() => t.type !== 'milestone' && startEdit(t.id, 'progress', t.progress)}
+                    onDoubleClick={() => t.type === 'task' && startEdit(t.id, 'progress', t.progress)}
                   >
                     {editing?.id === t.id && editing.field === 'progress' ? (
                       <input
@@ -284,6 +369,8 @@ export function TaskListView({ project, onEditTask, onAddTask }: TaskListViewPro
                         }}
                         className="w-16 h-7 px-2 border border-indigo-500 rounded text-xs tabular-nums bg-surface text-text-primary focus:outline-none"
                       />
+                    ) : t.type === 'group' ? (
+                      <span className="text-xs text-text-muted">—</span>
                     ) : (
                       <div className="flex items-center gap-2">
                         <div className="w-16 h-1.5 rounded-full bg-surface-muted overflow-hidden">
@@ -308,7 +395,7 @@ export function TaskListView({ project, onEditTask, onAddTask }: TaskListViewPro
                 </tr>
               );
             })}
-            {filtered.length === 0 && (
+            {rows.length === 0 && (
               <tr>
                 <td colSpan={7} className="px-3 py-10 text-center text-text-muted">
                   No tasks match "{filter}".

@@ -11,16 +11,20 @@ export function GanttTooltip({ task }: GanttTooltipProps) {
   const startISO = toISODate(task.start);
   const endISO = toISODate(task.end);
   const isMilestone = task.type === 'milestone';
+  const isGroup = task.type === 'project';
+
+  const badgeLabel = isMilestone ? 'Milestone' : isGroup ? 'Group' : 'Task';
+  const badgeClasses = isMilestone
+    ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
+    : isGroup
+    ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
+    : 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300';
 
   return (
     <div className="bg-surface border border-border rounded-xl shadow-xl p-3 min-w-[200px] max-w-[260px]">
       <div className="flex items-center gap-2 mb-2">
-        <span className={`text-xs font-medium px-1.5 py-0.5 rounded-md ${
-          isMilestone
-            ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
-            : 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
-        }`}>
-          {isMilestone ? 'Milestone' : 'Task'}
+        <span className={`text-xs font-medium px-1.5 py-0.5 rounded-md ${badgeClasses}`}>
+          {badgeLabel}
         </span>
       </div>
       <p className="text-sm font-semibold text-text-primary mb-2 leading-tight">{task.name}</p>
@@ -40,21 +44,23 @@ export function GanttTooltip({ task }: GanttTooltipProps) {
               <span>End</span>
               <span className="font-medium text-text-primary">{formatDisplay(endISO)}</span>
             </div>
-            <div className="mt-2 pt-2 border-t border-border">
-              <div className="flex justify-between mb-1">
-                <span>Progress</span>
-                <span className="font-semibold text-text-primary">{Math.round(task.progress)}%</span>
+            {!isGroup && (
+              <div className="mt-2 pt-2 border-t border-border">
+                <div className="flex justify-between mb-1">
+                  <span>Progress</span>
+                  <span className="font-semibold text-text-primary">{Math.round(task.progress)}%</span>
+                </div>
+                <div className="w-full h-1.5 bg-surface-muted rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${Math.max(0, Math.min(100, task.progress))}%`,
+                      backgroundColor: task.styles?.progressColor ?? '#6366F1',
+                    }}
+                  />
+                </div>
               </div>
-              <div className="w-full h-1.5 bg-surface-muted rounded-full overflow-hidden">
-                <div
-                  className="h-full rounded-full"
-                  style={{
-                    width: `${Math.max(0, Math.min(100, task.progress))}%`,
-                    backgroundColor: task.styles?.progressColor ?? '#6366F1',
-                  }}
-                />
-              </div>
-            </div>
+            )}
           </>
         )}
       </div>

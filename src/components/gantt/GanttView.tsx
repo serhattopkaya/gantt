@@ -39,10 +39,14 @@ export const GanttView = forwardRef<GanttViewHandle, GanttViewProps>(function Ga
   const tasks = useAppStore(s => s.tasks);
   const viewMode = useAppStore(s => s.viewMode);
   const theme = useAppStore(s => s.theme);
+  const collapsedGroupIds = useAppStore(s => s.collapsedGroupIds);
   const updateTask = useAppStore(s => s.updateTask);
   const deleteTask = useAppStore(s => s.deleteTask);
   const restoreTask = useAppStore(s => s.restoreTask);
+  const toggleGroupCollapsed = useAppStore(s => s.toggleGroupCollapsed);
   const pushToast = useToastStore(s => s.push);
+
+  const collapsedSet = useMemo(() => new Set(collapsedGroupIds), [collapsedGroupIds]);
 
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -81,8 +85,17 @@ export const GanttView = forwardRef<GanttViewHandle, GanttViewProps>(function Ga
   );
 
   const libTasks = useMemo(
-    () => toLibTasks(projectTasks, project),
-    [projectTasks, project]
+    () => toLibTasks(projectTasks, project, collapsedSet),
+    [projectTasks, project, collapsedSet]
+  );
+
+  const visibleRowCount = useMemo(
+    () =>
+      projectTasks.filter(t => {
+        if (t.type === 'group') return true;
+        return !(t.parentId && collapsedSet.has(t.parentId));
+      }).length,
+    [projectTasks, collapsedSet]
   );
 
   if (projectTasks.length === 0) {
@@ -91,7 +104,7 @@ export const GanttView = forwardRef<GanttViewHandle, GanttViewProps>(function Ga
 
   const libViewMode = viewModeMap[viewMode];
   const colWidth = columnWidthFor[viewMode];
-  const chartHeight = Math.max(300, projectTasks.length * ROW_HEIGHT + HEADER_HEIGHT);
+  const chartHeight = Math.max(300, visibleRowCount * ROW_HEIGHT + HEADER_HEIGHT);
 
   function handleDateChange(task: LibTask) {
     updateTask(task.id, {
@@ -136,6 +149,7 @@ export const GanttView = forwardRef<GanttViewHandle, GanttViewProps>(function Ga
         onProgressChange={handleProgressChange}
         onDoubleClick={handleDoubleClick}
         onDelete={handleDelete}
+        onExpanderClick={(task) => toggleGroupCollapsed(task.id)}
         TooltipContent={GanttTooltip}
       />
 

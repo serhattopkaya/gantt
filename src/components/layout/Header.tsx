@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Plus,
   Flag,
+  FolderTree,
   Settings,
   Calendar,
   Menu,
@@ -30,6 +31,7 @@ import { VIEW_MODES, type ThemeKey } from '../../types';
 interface HeaderProps {
   onAddTask: () => void;
   onAddMilestone: () => void;
+  onAddGroup: () => void;
   onEditProject: () => void;
   onJumpToToday: () => void;
   onOpenMobileSidebar: () => void;
@@ -38,6 +40,7 @@ interface HeaderProps {
 export function Header({
   onAddTask,
   onAddMilestone,
+  onAddGroup,
   onEditProject,
   onJumpToToday,
   onOpenMobileSidebar,
@@ -228,6 +231,17 @@ export function Header({
 
         {!isDashboard && currentProject && (
           <>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={onAddGroup}
+              disabled={!currentProjectId}
+              className="hidden md:inline-flex"
+              title="Add a phase or workpackage that contains tasks"
+            >
+              <FolderTree size={14} />
+              Group
+            </Button>
             <Button
               variant="secondary"
               size="sm"

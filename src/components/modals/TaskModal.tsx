@@ -53,6 +53,7 @@ export function TaskModal({ mode, initial, projectId, defaultType = 'task', onCl
   const [end, setEnd] = useState(initial?.end ?? today);
   const [progress, setProgress] = useState(initial?.progress ?? 0);
   const [dependencies, setDependencies] = useState<string[]>(initial?.dependencies ?? []);
+  const [parentId, setParentId] = useState<string | undefined>(initial?.parentId);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
@@ -65,15 +66,30 @@ export function TaskModal({ mode, initial, projectId, defaultType = 'task', onCl
   const endErrId = `${uid}-end-error`;
   const progressId = `${uid}-progress`;
   const depErrId = `${uid}-dep-error`;
+  const parentSelectId = `${uid}-parent`;
 
   const projectTasks = tasks.filter(
     t => t.projectId === projectId && t.id !== initial?.id
   );
-  const validDependencies = dependencies.filter(id => projectTasks.some(t => t.id === id));
-  const depOptions = projectTasks.map(t => ({ value: t.id, label: t.name }));
+  const groupOptions = projectTasks.filter(t => t.type === 'group');
+  // Don't allow groups to be chosen as predecessors — arrows from group bars
+  // are confusing and their span is derived from children.
+  const dependencyCandidates = projectTasks.filter(t => t.type !== 'group');
+  const validDependencies = dependencies.filter(id =>
+    dependencyCandidates.some(t => t.id === id)
+  );
+  const depOptions = dependencyCandidates.map(t => ({ value: t.id, label: t.name }));
 
   function handleTypeChange(newType: AppTaskType) {
     setType(newType);
+    if (newType === 'milestone') {
+      setEnd(start);
+    } else if (end < start) {
+      setEnd(start);
+    }
+    if (newType === 'group') {
+      setParentId(undefined);
+    }
     setErrors(prev => {
       const next = { ...prev };
       delete next.end;
@@ -101,7 +117,7 @@ export function TaskModal({ mode, initial, projectId, defaultType = 'task', onCl
     const newErrors: Record<string, string> = {};
     if (!name.trim()) newErrors.name = 'Name is required';
     if (!start) newErrors.start = 'Date is required';
-    if (type === 'task') {
+    if (type === 'task' || type === 'group') {
       if (!end) newErrors.end = 'End date is required';
       else if (end < start) newErrors.end = 'End date must be on or after start date';
     }
@@ -130,8 +146,9 @@ export function TaskModal({ mode, initial, projectId, defaultType = 'task', onCl
       name: name.trim(),
       start,
       end: type === 'milestone' ? start : end,
-      progress: type === 'milestone' ? 0 : progress,
+      progress: type === 'milestone' || type === 'group' ? 0 : progress,
       dependencies: validDependencies,
+      parentId: type === 'group' ? undefined : parentId,
     };
 
     if (mode === 'create') {
@@ -164,20 +181,32 @@ export function TaskModal({ mode, initial, projectId, defaultType = 'task', onCl
     : [];
 
   const isMilestone = type === 'milestone';
-  const canShowDuration = !isMilestone && start && end && end >= start;
+  const isGroup = type === 'group';
+  const hideEnd = isMilestone;
+  const hideProgress = isMilestone || isGroup;
+  const canShowDuration = !hideEnd && start && end && end >= start;
   const working = canShowDuration ? workingDaysBetween(start, end) : 0;
   const calendar = canShowDuration ? calendarDaysBetween(start, end) : 0;
 
   const progressNum = Number.isFinite(progress) ? progress : 0;
 
+  const modalTitle =
+    mode === 'create'
+      ? (isMilestone ? 'New milestone' : isGroup ? 'New group' : 'New task')
+      : 'Edit';
+  const submitLabel =
+    mode === 'create'
+      ? (isMilestone ? 'Add milestone' : isGroup ? 'Add group' : 'Add task')
+      : 'Save changes';
+
   return (
-    <Modal title={mode === 'create' ? (isMilestone ? 'New milestone' : 'New task') : 'Edit'} onClose={onClose}>
+    <Modal title={modalTitle} onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4" noValidate>
 
         <div>
           <label className="block text-sm font-medium text-text-primary mb-1.5">Type</label>
           <div className="flex gap-2" role="radiogroup" aria-label="Task type">
-            {(['task', 'milestone'] as AppTaskType[]).map(t => (
+            {(['task', 'milestone', 'group'] as AppTaskType[]).map(t => (
               <button
                 key={t}
                 type="button"
@@ -205,7 +234,9 @@ export function TaskModal({ mode, initial, projectId, defaultType = 'task', onCl
             type="text"
             value={name}
             onChange={e => { setName(e.target.value); setErrors(prev => ({ ...prev, name: '' })); }}
-            placeholder={isMilestone ? 'e.g. Product Launch' : 'e.g. Design mockups'}
+            placeholder={
+              isMilestone ? 'e.g. Product Launch' : isGroup ? 'e.g. Phase 1 — Discovery' : 'e.g. Design mockups'
+            }
             autoFocus
             aria-invalid={!!errors.name}
             aria-describedby={errors.name ? nameErrId : undefined}
@@ -214,7 +245,7 @@ export function TaskModal({ mode, initial, projectId, defaultType = 'task', onCl
           <FieldError id={nameErrId} message={errors.name} />
         </div>
 
-        <div className={`grid gap-3 transition-all duration-200 ${isMilestone ? 'grid-cols-1' : 'grid-cols-2'}`}>
+        <div className={`grid gap-3 transition-all duration-200 ${hideEnd ? 'grid-cols-1' : 'grid-cols-2'}`}>
           <div>
             <label htmlFor={startId} className="block text-sm font-medium text-text-primary mb-1">
               {isMilestone ? 'Date' : 'Start date'}
@@ -251,11 +282,11 @@ export function TaskModal({ mode, initial, projectId, defaultType = 'task', onCl
           <div
             className="collapse-height"
             style={{
-              maxHeight: isMilestone ? '0px' : '260px',
-              opacity: isMilestone ? 0 : 1,
-              pointerEvents: isMilestone ? 'none' : 'auto',
+              maxHeight: hideEnd ? '0px' : '260px',
+              opacity: hideEnd ? 0 : 1,
+              pointerEvents: hideEnd ? 'none' : 'auto',
             }}
-            aria-hidden={isMilestone}
+            aria-hidden={hideEnd}
           >
             <label htmlFor={endId} className="block text-sm font-medium text-text-primary mb-1">End date</label>
             <input
@@ -293,11 +324,11 @@ export function TaskModal({ mode, initial, projectId, defaultType = 'task', onCl
         <div
           className="collapse-height"
           style={{
-            maxHeight: isMilestone ? '0px' : '120px',
-            opacity: isMilestone ? 0 : 1,
-            pointerEvents: isMilestone ? 'none' : 'auto',
+            maxHeight: hideProgress ? '0px' : '120px',
+            opacity: hideProgress ? 0 : 1,
+            pointerEvents: hideProgress ? 'none' : 'auto',
           }}
-          aria-hidden={isMilestone}
+          aria-hidden={hideProgress}
         >
           <div className="flex items-center justify-between mb-1">
             <label htmlFor={progressId} className="text-sm font-medium text-text-primary">Progress</label>
@@ -343,7 +374,31 @@ export function TaskModal({ mode, initial, projectId, defaultType = 'task', onCl
           </div>
         </div>
 
-        {projectTasks.length > 0 && (
+        {!isGroup && groupOptions.length > 0 && (
+          <div>
+            <label
+              htmlFor={parentSelectId}
+              className="block text-sm font-medium text-text-primary mb-1"
+            >
+              Group
+            </label>
+            <select
+              id={parentSelectId}
+              value={parentId ?? ''}
+              onChange={e => setParentId(e.target.value || undefined)}
+              className="w-full h-10 px-3 border border-border-strong bg-surface text-text-primary rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            >
+              <option value="">No group</option>
+              {groupOptions.map(g => (
+                <option key={g.id} value={g.id}>
+                  {g.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {!isGroup && depOptions.length > 0 && (
           <div>
             <MultiSelect
               label="Dependencies"
@@ -374,9 +429,7 @@ export function TaskModal({ mode, initial, projectId, defaultType = 'task', onCl
           </div>
           <div className="flex gap-2">
             <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
-            <Button type="submit">
-              {mode === 'create' ? (isMilestone ? 'Add milestone' : 'Add task') : 'Save changes'}
-            </Button>
+            <Button type="submit">{submitLabel}</Button>
           </div>
         </div>
       </form>

@@ -30,7 +30,7 @@ function metricsFromBucket(bucket: AppTask[], today: string, cutoffIso: string):
     if (t.type === 'milestone') {
       if (t.start >= today && t.start <= cutoffIso) upcomingMilestones.push(t);
       if (t.start < today && t.progress < 100) overdueTasks.push(t);
-    } else {
+    } else if (t.type === 'task') {
       regularCount++;
       progressSum += t.progress;
       if (t.progress >= 100) completed++;
@@ -41,7 +41,7 @@ function metricsFromBucket(bucket: AppTask[], today: string, cutoffIso: string):
   upcomingMilestones.sort((a, b) => a.start.localeCompare(b.start));
 
   return {
-    totalTasks: bucket.length,
+    totalTasks: bucket.filter(t => t.type !== 'group').length,
     completedTasks: completed,
     avgProgress: regularCount > 0 ? Math.round(progressSum / regularCount) : 0,
     upcomingMilestones,
@@ -101,7 +101,7 @@ export function computeOverallMetrics(
 
   return {
     totalProjects: projects.length,
-    totalTasks: tasks.length,
+    totalTasks: tasks.filter(t => t.type !== 'group').length,
     completedTasks: completed,
     avgProgress: regularCount > 0 ? Math.round(totalProgress / regularCount) : 0,
     upcomingMilestones,

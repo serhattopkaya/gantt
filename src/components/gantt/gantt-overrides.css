@@ -3,3 +3,17 @@
   stroke: var(--color-primary);
   stroke-width: 2;
 }
+
+/* Make group bars visually match task bars — the library renders project-type
+   bars with a half-height "top" rect + two triangular end caps on top of the
+   background. Hide those decorations and drop the background's 0.6 opacity so
+   groups are rendered as a single rounded bar, identical to tasks. The class
+   names are CSS-module hashes from gantt-task-react's project component
+   (projectWrapper, projectBackground, projectTop). */
+.gantt-overrides ._1KJ6x > rect:nth-of-type(3),
+.gantt-overrides ._1KJ6x > polygon {
+  display: none;
+}
+.gantt-overrides ._1KJ6x > rect:nth-of-type(1) {
+  opacity: 1;
+}

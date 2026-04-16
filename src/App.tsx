@@ -85,6 +85,7 @@ export default function App() {
         <Header
           onAddTask={() => setModal({ type: 'newTask', taskType: 'task' })}
           onAddMilestone={() => setModal({ type: 'newTask', taskType: 'milestone' })}
+          onAddGroup={() => setModal({ type: 'newTask', taskType: 'group' })}
           onEditProject={() => setModal({ type: 'editProject' })}
           onJumpToToday={() => ganttRef.current?.jumpToToday()}
           onOpenMobileSidebar={() => setMobileSidebarOpen(true)}

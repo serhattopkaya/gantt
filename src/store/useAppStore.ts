@@ -22,6 +22,7 @@ interface StoreState {
   view: AppView;
   sidebarCollapsed: boolean;
   seedDismissed: boolean;
+  collapsedGroupIds: string[];
   hydrated: boolean;
 
   // project actions
@@ -48,6 +49,8 @@ interface StoreState {
   setView: (v: AppView) => void;
   setSidebarCollapsed: (c: boolean) => void;
   toggleSidebar: () => void;
+  toggleGroupCollapsed: (id: string) => void;
+  setGroupCollapsed: (id: string, collapsed: boolean) => void;
   dismissSeed: () => void;
   clearSeedData: () => void;
 
@@ -78,6 +81,7 @@ export const useAppStore = create<StoreState>((set, get) => ({
   view: 'project',
   sidebarCollapsed: false,
   seedDismissed: false,
+  collapsedGroupIds: [],
   hydrated: false,
 
   addProject({ name, color }) {
@@ -108,10 +112,12 @@ export const useAppStore = create<StoreState>((set, get) => ({
       if (nextCurrentId === id) {
         nextCurrentId = remaining.length > 0 ? remaining[0].id : null;
       }
+      const doomedTaskIds = new Set(s.tasks.filter(t => t.projectId === id).map(t => t.id));
       return {
         projects: remaining,
         tasks: s.tasks.filter(t => t.projectId !== id),
         currentProjectId: nextCurrentId,
+        collapsedGroupIds: s.collapsedGroupIds.filter(g => !doomedTaskIds.has(g)),
       };
     });
   },
@@ -135,22 +141,23 @@ export const useAppStore = create<StoreState>((set, get) => ({
 
   addTask(input) {
     const { tasks } = get();
-    const projectTaskIds = new Set(
-      tasks.filter(t => t.projectId === input.projectId).map(t => t.id)
-    );
-    const maxOrder = tasks
-      .filter(t => t.projectId === input.projectId)
-      .reduce((m, t) => Math.max(m, t.displayOrder), -1);
+    const projectTasks = tasks.filter(t => t.projectId === input.projectId);
+    const projectTaskIds = new Set(projectTasks.map(t => t.id));
+    const projectGroupIds = new Set(projectTasks.filter(t => t.type === 'group').map(t => t.id));
+    const maxOrder = projectTasks.reduce((m, t) => Math.max(m, t.displayOrder), -1);
+    const isGroup = input.type === 'group';
+    const isMilestone = input.type === 'milestone';
+    const parentId =
+      !isGroup && input.parentId && projectGroupIds.has(input.parentId) ? input.parentId : undefined;
     const task: AppTask = {
       ...input,
       id: uuid(),
       displayOrder: maxOrder + 1,
-      // Enforce milestone constraint
-      end: input.type === 'milestone' ? input.start : input.end,
+      end: isMilestone ? input.start : input.end,
       progress:
-        input.type === 'milestone' ? 0 : Math.max(0, Math.min(100, input.progress)),
-      // Drop dangling dependency ids (outside the target project)
+        isMilestone || isGroup ? 0 : Math.max(0, Math.min(100, input.progress)),
       dependencies: (input.dependencies ?? []).filter(dep => projectTaskIds.has(dep)),
+      parentId,
     };
     set(s => ({ tasks: [...s.tasks, task] }));
     return task;
@@ -160,9 +167,9 @@ export const useAppStore = create<StoreState>((set, get) => ({
     set(s => {
       const target = s.tasks.find(t => t.id === id);
       if (!target) return s;
-      const siblingIds = new Set(
-        s.tasks.filter(t => t.projectId === target.projectId && t.id !== id).map(t => t.id)
-      );
+      const projectSiblings = s.tasks.filter(t => t.projectId === target.projectId && t.id !== id);
+      const siblingIds = new Set(projectSiblings.map(t => t.id));
+      const groupIds = new Set(projectSiblings.filter(t => t.type === 'group').map(t => t.id));
       return {
         tasks: s.tasks.map(t => {
           if (t.id !== id) return t;
@@ -170,8 +177,14 @@ export const useAppStore = create<StoreState>((set, get) => ({
           if (updated.type === 'milestone') {
             updated.end = updated.start;
             updated.progress = 0;
+          } else if (updated.type === 'group') {
+            updated.progress = 0;
+            updated.parentId = undefined;
           } else if (typeof patch.progress === 'number') {
             updated.progress = Math.max(0, Math.min(100, patch.progress));
+          }
+          if (updated.type !== 'group' && updated.parentId && !groupIds.has(updated.parentId)) {
+            updated.parentId = undefined;
           }
           // Drop self-refs and dangling ids pointing to other projects / deleted tasks
           updated.dependencies = (updated.dependencies ?? []).filter(
@@ -190,7 +203,9 @@ export const useAppStore = create<StoreState>((set, get) => ({
         .map(t => ({
           ...t,
           dependencies: t.dependencies.filter(dep => dep !== id),
+          parentId: t.parentId === id ? undefined : t.parentId,
         })),
+      collapsedGroupIds: s.collapsedGroupIds.filter(g => g !== id),
     }));
   },
 
@@ -215,7 +230,7 @@ export const useAppStore = create<StoreState>((set, get) => ({
     const clamped = Math.max(0, Math.min(100, progress));
     set(s => ({
       tasks: s.tasks.map(t => {
-        if (!idSet.has(t.id) || t.type === 'milestone') return t;
+        if (!idSet.has(t.id) || t.type !== 'task') return t;
         return { ...t, progress: clamped };
       }),
     }));
@@ -255,7 +270,9 @@ export const useAppStore = create<StoreState>((set, get) => ({
         .map(t => ({
           ...t,
           dependencies: t.dependencies.filter(d => !idSet.has(d)),
+          parentId: t.parentId && idSet.has(t.parentId) ? undefined : t.parentId,
         })),
+      collapsedGroupIds: s.collapsedGroupIds.filter(g => !idSet.has(g)),
     }));
     return { tasks: snapshot, dependents: depSnapshots };
   },
@@ -302,6 +319,23 @@ export const useAppStore = create<StoreState>((set, get) => ({
     set(s => ({ sidebarCollapsed: !s.sidebarCollapsed }));
   },
 
+  toggleGroupCollapsed(id) {
+    set(s => ({
+      collapsedGroupIds: s.collapsedGroupIds.includes(id)
+        ? s.collapsedGroupIds.filter(g => g !== id)
+        : [...s.collapsedGroupIds, id],
+    }));
+  },
+
+  setGroupCollapsed(id, collapsed) {
+    set(s => {
+      const has = s.collapsedGroupIds.includes(id);
+      if (collapsed && !has) return { collapsedGroupIds: [...s.collapsedGroupIds, id] };
+      if (!collapsed && has) return { collapsedGroupIds: s.collapsedGroupIds.filter(g => g !== id) };
+      return s;
+    });
+  },
+
   dismissSeed() {
     set({ seedDismissed: true });
   },
@@ -321,6 +355,8 @@ export const useAppStore = create<StoreState>((set, get) => ({
   hydrate() {
     const saved = loadState();
     if (saved) {
+      const taskIds = new Set(saved.tasks.map(t => t.id));
+      const collapsed = (saved.collapsedGroupIds ?? []).filter(id => taskIds.has(id));
       set({
         projects: saved.projects,
         tasks: saved.tasks,
@@ -331,6 +367,7 @@ export const useAppStore = create<StoreState>((set, get) => ({
         view: saved.view ?? 'project',
         sidebarCollapsed: saved.sidebarCollapsed ?? false,
         seedDismissed: saved.seedDismissed ?? false,
+        collapsedGroupIds: collapsed,
         hydrated: true,
       });
     } else {
@@ -345,6 +382,7 @@ export const useAppStore = create<StoreState>((set, get) => ({
         view: 'project',
         sidebarCollapsed: false,
         seedDismissed: false,
+        collapsedGroupIds: [],
         hydrated: true,
       });
     }
@@ -354,12 +392,14 @@ export const useAppStore = create<StoreState>((set, get) => ({
     const nextCurrent = currentProjectId !== undefined
       ? currentProjectId
       : (projects.find(p => p.id === get().currentProjectId)?.id ?? projects[0]?.id ?? null);
+    const taskIds = new Set(tasks.map(t => t.id));
     set({
       projects,
       tasks,
       currentProjectId: nextCurrent,
       viewMode: viewMode ?? get().viewMode,
       seedDismissed: true,
+      collapsedGroupIds: get().collapsedGroupIds.filter(g => taskIds.has(g)),
     });
   },
 }));
@@ -375,10 +415,11 @@ useAppStore.subscribe((state, prev) => {
     state.displayMode === prev.displayMode &&
     state.view === prev.view &&
     state.sidebarCollapsed === prev.sidebarCollapsed &&
-    state.seedDismissed === prev.seedDismissed
+    state.seedDismissed === prev.seedDismissed &&
+    state.collapsedGroupIds === prev.collapsedGroupIds
   ) return;
   saveState({
-    version: 2,
+    version: 3,
     projects: state.projects,
     tasks: state.tasks,
     currentProjectId: state.currentProjectId,
@@ -388,5 +429,6 @@ useAppStore.subscribe((state, prev) => {
     view: state.view,
     sidebarCollapsed: state.sidebarCollapsed,
     seedDismissed: state.seedDismissed,
+    collapsedGroupIds: state.collapsedGroupIds,
   });
 });
