@@ -1,11 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAppStore } from './store/useAppStore';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
-import { GanttView } from './components/gantt/GanttView';
+import { GanttView, type GanttViewHandle } from './components/gantt/GanttView';
 import { EmptyState } from './components/common/EmptyState';
+import { Toaster } from './components/common/Toaster';
+import { SampleDataBanner } from './components/common/SampleDataBanner';
+import { Dashboard } from './components/dashboard/Dashboard';
+import { TaskListView } from './components/list/TaskListView';
 import { ProjectModal } from './components/modals/ProjectModal';
 import { TaskModal } from './components/modals/TaskModal';
+import { useApplyTheme } from './lib/useTheme';
+import { useUrlSync } from './lib/useUrlSync';
 import type { AppTask, AppTaskType } from './types';
 
 type ModalState =
@@ -16,28 +22,41 @@ type ModalState =
   | { type: 'editTask'; task: AppTask };
 
 export default function App() {
-  const hydrate = useAppStore(s => s.hydrate);
   const hydrated = useAppStore(s => s.hydrated);
   const projects = useAppStore(s => s.projects);
   const currentProjectId = useAppStore(s => s.currentProjectId);
   const setCurrentProject = useAppStore(s => s.setCurrentProject);
+  const view = useAppStore(s => s.view);
+  const setView = useAppStore(s => s.setView);
+  const displayMode = useAppStore(s => s.displayMode);
+  const theme = useAppStore(s => s.theme);
+
+  useApplyTheme(theme);
+  useUrlSync();
 
   const [modal, setModal] = useState<ModalState>({ type: 'none' });
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const ganttRef = useRef<GanttViewHandle>(null);
 
   useEffect(() => {
-    hydrate();
-  }, [hydrate]);
+    useAppStore.getState().hydrate();
+  }, []);
 
   // Auto-select first project if none is selected (e.g. after deletion)
   useEffect(() => {
-    if (hydrated && !currentProjectId && projects.length > 0) {
+    if (hydrated && !currentProjectId && projects.length > 0 && view === 'project') {
       setCurrentProject(projects[0].id);
     }
-  }, [hydrated, currentProjectId, projects, setCurrentProject]);
+  }, [hydrated, currentProjectId, projects, setCurrentProject, view]);
+
+  const effectiveModal: ModalState =
+    modal.type === 'editTask' && !projects.some(p => p.id === modal.task.projectId)
+      ? { type: 'none' }
+      : modal;
 
   if (!hydrated) {
     return (
-      <div className="h-full flex items-center justify-center">
+      <div className="h-full flex items-center justify-center bg-surface">
         <div className="w-8 h-8 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -49,25 +68,47 @@ export default function App() {
     setModal({ type: 'none' });
   }
 
+  function openProject(projectId: string) {
+    setCurrentProject(projectId);
+    setView('project');
+  }
+
   return (
-    <div className="h-full flex">
-      <Sidebar onAddProject={() => setModal({ type: 'newProject' })} />
+    <div className="h-full flex bg-surface">
+      <Sidebar
+        onAddProject={() => setModal({ type: 'newProject' })}
+        mobileOpen={mobileSidebarOpen}
+        onMobileClose={() => setMobileSidebarOpen(false)}
+      />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <Header
           onAddTask={() => setModal({ type: 'newTask', taskType: 'task' })}
           onAddMilestone={() => setModal({ type: 'newTask', taskType: 'milestone' })}
           onEditProject={() => setModal({ type: 'editProject' })}
+          onJumpToToday={() => ganttRef.current?.jumpToToday()}
+          onOpenMobileSidebar={() => setMobileSidebarOpen(true)}
         />
 
+        <SampleDataBanner />
+
         <main className="flex-1 overflow-hidden flex flex-col">
-          {!currentProject ? (
+          {view === 'dashboard' ? (
+            <Dashboard onOpenProject={openProject} />
+          ) : !currentProject ? (
             <EmptyState
               variant="no-project"
               onAction={() => setModal({ type: 'newProject' })}
             />
+          ) : displayMode === 'list' ? (
+            <TaskListView
+              project={currentProject}
+              onEditTask={task => setModal({ type: 'editTask', task })}
+              onAddTask={() => setModal({ type: 'newTask', taskType: 'task' })}
+            />
           ) : (
             <GanttView
+              ref={ganttRef}
               project={currentProject}
               onEditTask={task => setModal({ type: 'editTask', task })}
               onAddTask={() => setModal({ type: 'newTask', taskType: 'task' })}
@@ -77,29 +118,30 @@ export default function App() {
       </div>
 
       {/* Modals */}
-      {modal.type === 'newProject' && (
+      {effectiveModal.type === 'newProject' && (
         <ProjectModal mode="create" onClose={closeModal} />
       )}
-      {modal.type === 'editProject' && currentProject && (
+      {effectiveModal.type === 'editProject' && currentProject && (
         <ProjectModal mode="edit" initial={currentProject} onClose={closeModal} />
       )}
-      {modal.type === 'newTask' && currentProjectId && (
+      {effectiveModal.type === 'newTask' && currentProjectId && (
         <TaskModal
           mode="create"
           projectId={currentProjectId}
-          defaultType={modal.taskType}
+          defaultType={effectiveModal.taskType}
           onClose={closeModal}
         />
       )}
-      {modal.type === 'editTask' && currentProjectId && (
+      {effectiveModal.type === 'editTask' && (
         <TaskModal
           mode="edit"
-          initial={modal.task}
-          projectId={currentProjectId}
+          initial={effectiveModal.task}
+          projectId={effectiveModal.task.projectId}
           onClose={closeModal}
         />
       )}
 
+      <Toaster />
     </div>
   );
 }

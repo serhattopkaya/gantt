@@ -3,6 +3,8 @@ import type { Project, AppTask } from '../types';
 import { defaultColor } from './colors';
 import { toISODate, addDays } from './dates';
 
+export const SEED_MARKER_NAME = 'My First Project';
+
 export function createSeedData(): { project: Project; tasks: AppTask[] } {
   const projectId = uuid();
   const now = new Date();
@@ -14,7 +16,7 @@ export function createSeedData(): { project: Project; tasks: AppTask[] } {
 
   const project: Project = {
     id: projectId,
-    name: 'My First Project',
+    name: SEED_MARKER_NAME,
     color: defaultColor(),
     createdAt: now.toISOString(),
     updatedAt: now.toISOString(),

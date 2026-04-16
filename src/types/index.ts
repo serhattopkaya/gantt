@@ -20,12 +20,27 @@ export interface AppTask {
   displayOrder: number;
 }
 
-export type ViewModeKey = 'Day' | 'Week' | 'Month';
+export const VIEW_MODES = ['Day', 'Week', 'Month', 'Quarter', 'Year'] as const;
+export type ViewModeKey = typeof VIEW_MODES[number];
+
+export const THEMES = ['light', 'dark', 'system'] as const;
+export type ThemeKey = typeof THEMES[number];
+
+export const DISPLAY_MODES = ['gantt', 'list'] as const;
+export type DisplayMode = typeof DISPLAY_MODES[number];
+
+export const APP_VIEWS = ['dashboard', 'project'] as const;
+export type AppView = typeof APP_VIEWS[number];
 
 export interface StoredState {
-  version: 1;
+  version: 2;
   projects: Project[];
   tasks: AppTask[];
   currentProjectId: string | null;
   viewMode: ViewModeKey;
+  theme?: ThemeKey;
+  displayMode?: DisplayMode;
+  view?: AppView;
+  sidebarCollapsed?: boolean;
+  seedDismissed?: boolean;
 }

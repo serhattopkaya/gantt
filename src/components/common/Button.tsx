@@ -13,9 +13,9 @@ const variantClasses: Record<Variant, string> = {
   primary:
     'bg-indigo-600 text-white hover:bg-indigo-700 active:bg-indigo-800 shadow-sm',
   secondary:
-    'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 active:bg-slate-100 shadow-sm',
+    'bg-surface text-text-primary border border-border-strong hover:bg-surface-muted active:bg-border shadow-sm',
   ghost:
-    'bg-transparent text-slate-600 hover:bg-slate-100 active:bg-slate-200',
+    'bg-transparent text-text-secondary hover:bg-surface-muted active:bg-border',
   danger:
     'bg-red-600 text-white hover:bg-red-700 active:bg-red-800 shadow-sm',
 };
@@ -34,7 +34,7 @@ export function Button({
 }: ButtonProps) {
   return (
     <button
-      className={`inline-flex items-center justify-center rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
+      className={`inline-flex items-center justify-center rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 focus-visible:ring-offset-surface ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
       {...rest}
     >
       {children}

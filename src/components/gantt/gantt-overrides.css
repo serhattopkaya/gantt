@@ -1,0 +1,5 @@
+/* Strong vertical "today" marker on top of the library's column highlight. */
+.gantt-overrides .today rect[width] {
+  stroke: var(--color-primary);
+  stroke-width: 2;
+}

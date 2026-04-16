@@ -30,10 +30,16 @@ export const viewModeMap: Record<ViewModeKey, ViewMode> = {
   Day: ViewMode.Day,
   Week: ViewMode.Week,
   Month: ViewMode.Month,
+  // Quarter zooms out from Month without a true quarter header — the library
+  // has no Quarter mode, so we reuse Month with narrower columns.
+  Quarter: ViewMode.Month,
+  Year: ViewMode.Year,
 };
 
 export const columnWidthFor: Record<ViewModeKey, number> = {
   Day: 60,
   Week: 120,
   Month: 260,
+  Quarter: 90,
+  Year: 300,
 };

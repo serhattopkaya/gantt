@@ -6,10 +6,10 @@ const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingState: StoredState | null = null;
 
-function isValidStoredState(v: unknown): v is StoredState {
+export function isValidStoredState(v: unknown): v is StoredState {
   if (!v || typeof v !== 'object') return false;
   const s = v as Record<string, unknown>;
-  if (s.version !== 1) return false;
+  if (s.version !== 1 && s.version !== 2) return false;
   if (!Array.isArray(s.projects) || !Array.isArray(s.tasks)) return false;
   for (const p of s.projects as unknown[]) {
     if (!p || typeof p !== 'object') return false;
@@ -36,10 +36,11 @@ export function loadState(): StoredState | null {
     if (!raw) return null;
     const parsed: unknown = JSON.parse(raw);
     if (!isValidStoredState(parsed)) {
-      console.warn('[gantt] Stored state failed validation; starting fresh.');
+      console.warn('[gantt] Stored state failed validation; ignoring it and falling back to seed data.');
       return null;
     }
-    return parsed;
+    // Normalize legacy v1 to v2 shape (optional fields remain undefined)
+    return { ...parsed, version: 2 };
   } catch {
     return null;
   }

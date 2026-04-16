@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { X, ChevronDown } from 'lucide-react';
 
 interface Option {
@@ -17,7 +18,10 @@ interface MultiSelectProps {
 export function MultiSelect({ options, value, onChange, placeholder = 'Select…', label }: MultiSelectProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [activeIndex, setActiveIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const optionsRef = useRef<(HTMLButtonElement | null)[]>([]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -34,6 +38,13 @@ export function MultiSelect({ options, value, onChange, placeholder = 'Select…
     o.label.toLowerCase().includes(search.toLowerCase())
   );
 
+  const safeActiveIndex =
+    filtered.length === 0 ? 0 : Math.min(activeIndex, filtered.length - 1);
+
+  useEffect(() => {
+    if (open) optionsRef.current[safeActiveIndex]?.scrollIntoView({ block: 'nearest' });
+  }, [open, safeActiveIndex]);
+
   const toggle = (val: string) => {
     if (value.includes(val)) {
       onChange(value.filter(v => v !== val));
@@ -42,30 +53,67 @@ export function MultiSelect({ options, value, onChange, placeholder = 'Select…
     }
   };
 
-  // Zip value ids with their labels, filtering out any stale ids with no matching option
+  function closeAndFocusTrigger() {
+    setOpen(false);
+    setSearch('');
+    triggerRef.current?.focus();
+  }
+
+  function handleKeyDown(e: ReactKeyboardEvent) {
+    if (!open) {
+      if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        setOpen(true);
+        setActiveIndex(0);
+      }
+      return;
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeAndFocusTrigger();
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActiveIndex(i => (filtered.length === 0 ? 0 : (i + 1) % filtered.length));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveIndex(i =>
+        filtered.length === 0 ? 0 : (i - 1 + filtered.length) % filtered.length
+      );
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const option = filtered[safeActiveIndex];
+      if (option) toggle(option.value);
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      setActiveIndex(0);
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      setActiveIndex(Math.max(0, filtered.length - 1));
+    }
+  }
+
   const selectedChips = value
     .map(v => ({ value: v, label: options.find(o => o.value === v)?.label }))
     .filter((c): c is { value: string; label: string } => !!c.label);
 
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={containerRef} className="relative" onKeyDown={handleKeyDown}>
       {label && (
-        <label className="block text-sm font-medium text-slate-700 mb-1">{label}</label>
+        <label className="block text-sm font-medium text-text-primary mb-1">{label}</label>
       )}
 
-      {/* Chips */}
       {selectedChips.length > 0 && (
         <div className="flex flex-wrap gap-1 mb-2">
           {selectedChips.map(chip => (
             <span
               key={chip.value}
-              className="inline-flex items-center gap-1 bg-indigo-100 text-indigo-700 rounded-full px-2 py-0.5 text-xs font-medium"
+              className="inline-flex items-center gap-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-full px-2 py-0.5 text-xs font-medium"
             >
               {chip.label}
               <button
                 type="button"
                 onClick={() => toggle(chip.value)}
-                className="hover:text-indigo-900"
+                className="hover:text-indigo-900 dark:hover:text-indigo-200"
                 aria-label={`Remove ${chip.label}`}
               >
                 <X size={10} />
@@ -75,53 +123,62 @@ export function MultiSelect({ options, value, onChange, placeholder = 'Select…
         </div>
       )}
 
-      {/* Trigger */}
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between h-10 px-3 border border-slate-300 rounded-lg text-sm text-left bg-white hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className="w-full flex items-center justify-between h-10 px-3 border border-border-strong rounded-lg text-sm text-left bg-surface hover:border-text-muted focus:outline-none focus:ring-2 focus:ring-indigo-500"
       >
-        <span className={value.length === 0 ? 'text-slate-400' : 'text-slate-700'}>
+        <span className={value.length === 0 ? 'text-text-muted' : 'text-text-primary'}>
           {value.length === 0 ? placeholder : `${value.length} selected`}
         </span>
-        <ChevronDown size={16} className={`text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown size={16} className={`text-text-muted transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
-      {/* Dropdown */}
       {open && (
-        <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
-          <div className="p-2 border-b border-slate-100">
+        <div className="absolute z-50 mt-1 w-full bg-surface border border-border rounded-xl shadow-lg overflow-hidden">
+          <div className="p-2 border-b border-border">
             <input
               type="text"
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search…"
-              className="w-full text-sm px-2 py-1.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full text-sm px-2 py-1.5 border border-border rounded-lg bg-surface text-text-primary focus:outline-none focus:ring-2 focus:ring-indigo-500"
               autoFocus
             />
           </div>
-          <ul className="max-h-48 overflow-y-auto">
+          <ul className="max-h-48 overflow-y-auto" role="listbox" aria-multiselectable="true">
             {filtered.length === 0 && (
-              <li className="px-3 py-2 text-sm text-slate-400 text-center">No options</li>
+              <li className="px-3 py-2 text-sm text-text-muted text-center">No options</li>
             )}
-            {filtered.map(option => (
-              <li key={option.value}>
-                <button
-                  type="button"
-                  onClick={() => toggle(option.value)}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 transition-colors"
-                >
-                  <span className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 ${value.includes(option.value) ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300'}`}>
-                    {value.includes(option.value) && (
-                      <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-                        <path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    )}
-                  </span>
-                  <span className="text-slate-700">{option.label}</span>
-                </button>
-              </li>
-            ))}
+            {filtered.map((option, idx) => {
+              const selected = value.includes(option.value);
+              const active = idx === safeActiveIndex;
+              return (
+                <li key={option.value}>
+                  <button
+                    ref={el => { optionsRef.current[idx] = el; }}
+                    type="button"
+                    role="option"
+                    aria-selected={selected}
+                    onMouseEnter={() => setActiveIndex(idx)}
+                    onClick={() => toggle(option.value)}
+                    className={`w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors ${active ? 'bg-surface-muted' : 'hover:bg-surface-alt'}`}
+                  >
+                    <span className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 ${selected ? 'bg-indigo-600 border-indigo-600' : 'border-border-strong'}`}>
+                      {selected && (
+                        <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                          <path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      )}
+                    </span>
+                    <span className="text-text-primary">{option.label}</span>
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}
