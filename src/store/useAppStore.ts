@@ -3,6 +3,7 @@ import { v4 as uuid } from 'uuid';
 import type {
   Project,
   AppTask,
+  ProjectNote,
   ViewModeKey,
   ThemeKey,
   DisplayMode,
@@ -15,6 +16,7 @@ import { fromISODate, toISODate, addDays } from '../lib/dates';
 interface StoreState {
   projects: Project[];
   tasks: AppTask[];
+  notes: ProjectNote[];
   currentProjectId: string | null;
   viewMode: ViewModeKey;
   theme: ThemeKey;
@@ -31,6 +33,11 @@ interface StoreState {
   deleteProject: (id: string) => void;
   restoreProject: (project: Project, tasks: AppTask[]) => void;
   setCurrentProject: (id: string | null) => void;
+
+  // note actions
+  addNote: (input: { projectId: string; body: string }) => ProjectNote | null;
+  updateNote: (id: string, body: string) => void;
+  deleteNote: (id: string) => void;
 
   // task actions
   addTask: (input: Omit<AppTask, 'id' | 'displayOrder'>) => AppTask;
@@ -56,7 +63,7 @@ interface StoreState {
 
   // persistence
   hydrate: () => void;
-  replaceAll: (input: { projects: Project[]; tasks: AppTask[]; currentProjectId?: string | null; viewMode?: ViewModeKey }) => void;
+  replaceAll: (input: { projects: Project[]; tasks: AppTask[]; notes?: ProjectNote[]; currentProjectId?: string | null; viewMode?: ViewModeKey }) => void;
 }
 
 export function detectSeeded(projects: Project[], tasks: AppTask[]): boolean {
@@ -74,6 +81,7 @@ function shiftIso(iso: string, days: number): string {
 export const useAppStore = create<StoreState>((set, get) => ({
   projects: [],
   tasks: [],
+  notes: [],
   currentProjectId: null,
   viewMode: 'Week',
   theme: 'system',
@@ -116,6 +124,7 @@ export const useAppStore = create<StoreState>((set, get) => ({
       return {
         projects: remaining,
         tasks: s.tasks.filter(t => t.projectId !== id),
+        notes: s.notes.filter(n => n.projectId !== id),
         currentProjectId: nextCurrentId,
         collapsedGroupIds: s.collapsedGroupIds.filter(g => !doomedTaskIds.has(g)),
       };
@@ -137,6 +146,37 @@ export const useAppStore = create<StoreState>((set, get) => ({
 
   setCurrentProject(id) {
     set({ currentProjectId: id });
+  },
+
+  addNote({ projectId, body }) {
+    const trimmed = body.trim();
+    if (!trimmed) return null;
+    const { projects } = get();
+    if (!projects.some(p => p.id === projectId)) return null;
+    const now = new Date().toISOString();
+    const note: ProjectNote = {
+      id: uuid(),
+      projectId,
+      body: trimmed,
+      createdAt: now,
+      updatedAt: now,
+    };
+    set(s => ({ notes: [...s.notes, note] }));
+    return note;
+  },
+
+  updateNote(id, body) {
+    const trimmed = body.trim();
+    if (!trimmed) return;
+    set(s => ({
+      notes: s.notes.map(n =>
+        n.id === id ? { ...n, body: trimmed, updatedAt: new Date().toISOString() } : n
+      ),
+    }));
+  },
+
+  deleteNote(id) {
+    set(s => ({ notes: s.notes.filter(n => n.id !== id) }));
   },
 
   addTask(input) {
@@ -356,10 +396,13 @@ export const useAppStore = create<StoreState>((set, get) => ({
     const saved = loadState();
     if (saved) {
       const taskIds = new Set(saved.tasks.map(t => t.id));
+      const projectIds = new Set(saved.projects.map(p => p.id));
       const collapsed = (saved.collapsedGroupIds ?? []).filter(id => taskIds.has(id));
+      const notes = (saved.notes ?? []).filter(n => projectIds.has(n.projectId));
       set({
         projects: saved.projects,
         tasks: saved.tasks,
+        notes,
         currentProjectId: saved.currentProjectId,
         viewMode: saved.viewMode,
         theme: saved.theme ?? 'system',
@@ -375,6 +418,7 @@ export const useAppStore = create<StoreState>((set, get) => ({
       set({
         projects: [project],
         tasks,
+        notes: [],
         currentProjectId: project.id,
         viewMode: 'Week',
         theme: 'system',
@@ -388,19 +432,22 @@ export const useAppStore = create<StoreState>((set, get) => ({
     }
   },
 
-  replaceAll({ projects, tasks, currentProjectId, viewMode }) {
+  replaceAll({ projects, tasks, notes, currentProjectId, viewMode }) {
     const nextCurrent = currentProjectId !== undefined
       ? currentProjectId
       : (projects.find(p => p.id === get().currentProjectId)?.id ?? projects[0]?.id ?? null);
     const taskIds = new Set(tasks.map(t => t.id));
-    set({
+    const projectIds = new Set(projects.map(p => p.id));
+    const incomingNotes = notes ?? [];
+    set(s => ({
       projects,
       tasks,
+      notes: incomingNotes.filter(n => projectIds.has(n.projectId)),
       currentProjectId: nextCurrent,
-      viewMode: viewMode ?? get().viewMode,
+      viewMode: viewMode ?? s.viewMode,
       seedDismissed: true,
-      collapsedGroupIds: get().collapsedGroupIds.filter(g => taskIds.has(g)),
-    });
+      collapsedGroupIds: s.collapsedGroupIds.filter(g => taskIds.has(g)),
+    }));
   },
 }));
 
@@ -409,6 +456,7 @@ useAppStore.subscribe((state, prev) => {
   if (
     state.projects === prev.projects &&
     state.tasks === prev.tasks &&
+    state.notes === prev.notes &&
     state.currentProjectId === prev.currentProjectId &&
     state.viewMode === prev.viewMode &&
     state.theme === prev.theme &&
@@ -422,6 +470,7 @@ useAppStore.subscribe((state, prev) => {
     version: 3,
     projects: state.projects,
     tasks: state.tasks,
+    notes: state.notes,
     currentProjectId: state.currentProjectId,
     viewMode: state.viewMode,
     theme: state.theme,

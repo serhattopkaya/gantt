@@ -22,13 +22,21 @@ export interface AppTask {
   parentId?: string;
 }
 
+export interface ProjectNote {
+  id: string;
+  projectId: string;
+  body: string;
+  createdAt: string; // ISO timestamp
+  updatedAt: string; // ISO timestamp
+}
+
 export const VIEW_MODES = ['Day', 'Week', 'Month', 'Quarter', 'Year'] as const;
 export type ViewModeKey = typeof VIEW_MODES[number];
 
 export const THEMES = ['light', 'dark', 'system'] as const;
 export type ThemeKey = typeof THEMES[number];
 
-export const DISPLAY_MODES = ['gantt', 'list'] as const;
+export const DISPLAY_MODES = ['gantt', 'list', 'notes'] as const;
 export type DisplayMode = typeof DISPLAY_MODES[number];
 
 export const APP_VIEWS = ['dashboard', 'project'] as const;
@@ -38,6 +46,7 @@ export interface StoredState {
   version: 2 | 3;
   projects: Project[];
   tasks: AppTask[];
+  notes?: ProjectNote[];
   currentProjectId: string | null;
   viewMode: ViewModeKey;
   theme?: ThemeKey;

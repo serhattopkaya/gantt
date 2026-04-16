@@ -1,10 +1,11 @@
-import type { Project, AppTask, StoredState, ViewModeKey } from '../types';
+import type { Project, AppTask, ProjectNote, StoredState, ViewModeKey } from '../types';
 import { isValidStoredState } from './storage';
 
 export interface ExportBundle {
   version: 2;
   projects: Project[];
   tasks: AppTask[];
+  notes: ProjectNote[];
   currentProjectId: string | null;
   viewMode: ViewModeKey;
 }
@@ -12,6 +13,7 @@ export interface ExportBundle {
 export function buildExportBundle(state: {
   projects: Project[];
   tasks: AppTask[];
+  notes: ProjectNote[];
   currentProjectId: string | null;
   viewMode: ViewModeKey;
 }): ExportBundle {
@@ -19,6 +21,7 @@ export function buildExportBundle(state: {
     version: 2,
     projects: state.projects,
     tasks: state.tasks,
+    notes: state.notes,
     currentProjectId: state.currentProjectId,
     viewMode: state.viewMode,
   };

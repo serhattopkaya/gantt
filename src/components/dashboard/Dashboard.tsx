@@ -1,23 +1,49 @@
 import { useMemo } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { computeOverallMetrics } from '../../lib/metrics';
-import { FolderOpen, ListTodo, CheckCircle2, Flag, AlertTriangle, TrendingUp } from 'lucide-react';
+import { FolderOpen, ListTodo, CheckCircle2, Flag, AlertTriangle, TrendingUp, MessageSquareText } from 'lucide-react';
 import { formatDisplay } from '../../lib/dates';
 import { EmptyState } from '../common/EmptyState';
-import type { AppTask, Project } from '../../types';
+import type { AppTask, Project, ProjectNote } from '../../types';
 
 interface DashboardProps {
   onOpenProject: (projectId: string) => void;
 }
 
+function formatRelativeTime(iso: string): string {
+  const now = Date.now();
+  const then = new Date(iso).getTime();
+  const diffMs = now - then;
+  const min = 60_000;
+  const hr = 60 * min;
+  const day = 24 * hr;
+  if (diffMs < min) return 'just now';
+  if (diffMs < hr) return `${Math.floor(diffMs / min)}m ago`;
+  if (diffMs < day) return `${Math.floor(diffMs / hr)}h ago`;
+  if (diffMs < 7 * day) return `${Math.floor(diffMs / day)}d ago`;
+  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
 export function Dashboard({ onOpenProject }: DashboardProps) {
   const projects = useAppStore(s => s.projects);
   const tasks = useAppStore(s => s.tasks);
+  const notes = useAppStore(s => s.notes);
 
   const metrics = useMemo(
     () => computeOverallMetrics(projects, tasks, 14),
     [projects, tasks]
   );
+
+  const latestNoteByProject = useMemo(() => {
+    const map = new Map<string, ProjectNote>();
+    for (const note of notes) {
+      const existing = map.get(note.projectId);
+      if (!existing || note.createdAt > existing.createdAt) {
+        map.set(note.projectId, note);
+      }
+    }
+    return map;
+  }, [notes]);
 
   if (projects.length === 0) {
     return <EmptyState variant="no-project" />;
@@ -94,6 +120,7 @@ export function Dashboard({ onOpenProject }: DashboardProps) {
             {projects.map(p => {
               const m = metrics.perProject.get(p.id);
               if (!m) return null;
+              const latestNote = latestNoteByProject.get(p.id);
               return (
                 <button
                   key={p.id}
@@ -121,6 +148,19 @@ export function Dashboard({ onOpenProject }: DashboardProps) {
                       </span>
                     )}
                   </div>
+                  {latestNote && (
+                    <div className="mt-3 pt-3 border-t border-border flex items-start gap-2">
+                      <MessageSquareText size={12} className="text-text-muted mt-0.5 flex-shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs text-text-secondary line-clamp-2 break-words">
+                          {latestNote.body}
+                        </p>
+                        <p className="text-[10px] text-text-muted mt-0.5">
+                          {formatRelativeTime(latestNote.createdAt)}
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </button>
               );
             })}

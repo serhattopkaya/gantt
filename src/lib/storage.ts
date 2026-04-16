@@ -27,6 +27,20 @@ export function isValidStoredState(v: unknown): v is StoredState {
       !ISO_DATE_RE.test(String(task.end))
     ) return false;
   }
+  if (s.notes !== undefined) {
+    if (!Array.isArray(s.notes)) return false;
+    for (const n of s.notes as unknown[]) {
+      if (!n || typeof n !== 'object') return false;
+      const note = n as Record<string, unknown>;
+      if (
+        typeof note.id !== 'string' ||
+        typeof note.projectId !== 'string' ||
+        typeof note.body !== 'string' ||
+        typeof note.createdAt !== 'string' ||
+        typeof note.updatedAt !== 'string'
+      ) return false;
+    }
+  }
   return true;
 }
 

@@ -8,6 +8,7 @@ import { Toaster } from './components/common/Toaster';
 import { SampleDataBanner } from './components/common/SampleDataBanner';
 import { Dashboard } from './components/dashboard/Dashboard';
 import { TaskListView } from './components/list/TaskListView';
+import { NotesView } from './components/notes/NotesView';
 import { ProjectModal } from './components/modals/ProjectModal';
 import { TaskModal } from './components/modals/TaskModal';
 import { useApplyTheme } from './lib/useTheme';
@@ -107,6 +108,8 @@ export default function App() {
               onEditTask={task => setModal({ type: 'editTask', task })}
               onAddTask={() => setModal({ type: 'newTask', taskType: 'task' })}
             />
+          ) : displayMode === 'notes' ? (
+            <NotesView project={currentProject} />
           ) : (
             <GanttView
               ref={ganttRef}

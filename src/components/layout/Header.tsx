@@ -15,6 +15,7 @@ import {
   FileSpreadsheet,
   LayoutGrid,
   List as ListIcon,
+  MessageSquareText,
   MoreVertical,
 } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
@@ -47,6 +48,7 @@ export function Header({
 }: HeaderProps) {
   const projects = useAppStore(s => s.projects);
   const tasks = useAppStore(s => s.tasks);
+  const notes = useAppStore(s => s.notes);
   const currentProjectId = useAppStore(s => s.currentProjectId);
   const viewMode = useAppStore(s => s.viewMode);
   const displayMode = useAppStore(s => s.displayMode);
@@ -81,6 +83,7 @@ export function Header({
     const bundle = buildExportBundle({
       projects,
       tasks,
+      notes,
       currentProjectId,
       viewMode,
     });
@@ -113,6 +116,7 @@ export function Header({
       replaceAll({
         projects: data.projects,
         tasks: data.tasks,
+        notes: data.notes ?? [],
         currentProjectId: data.currentProjectId,
         viewMode: data.viewMode,
       });
@@ -191,6 +195,18 @@ export function Header({
             >
               <ListIcon size={13} />
               List
+            </button>
+            <button
+              onClick={() => setDisplayMode('notes')}
+              className={`h-7 px-2.5 rounded-md text-xs font-medium transition-all inline-flex items-center gap-1.5 ${
+                displayMode === 'notes'
+                  ? 'bg-surface text-text-primary shadow-sm'
+                  : 'text-text-secondary hover:text-text-primary'
+              }`}
+              aria-pressed={displayMode === 'notes'}
+            >
+              <MessageSquareText size={13} />
+              Notes
             </button>
           </div>
         )}
