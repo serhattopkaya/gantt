@@ -94,7 +94,7 @@ export function Sidebar({ onAddProject, mobileOpen, onMobileClose }: SidebarProp
                     <rect x="2" y="12" width="6" height="2" rx="1" fill="white" opacity="0.5" />
                   </svg>
                 </div>
-                <span className="font-semibold text-text-primary text-sm">GanttApp</span>
+                <span className="font-semibold text-text-primary text-sm">PlanTrack</span>
               </div>
               <div className="flex items-center gap-1">
                 <button
